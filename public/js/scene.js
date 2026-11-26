@@ -25,9 +25,15 @@ export function cellToWorld(x, y, out = new THREE.Vector3()) {
   return out.set(x - COLS / 2 + 0.5, ROWS - 1 - y + 0.5, 0);
 }
 
-const CONTENT = { bottom: -0.8, top: 21.2 };
-const PREVIEW_INNER_X = COLS / 2 + 0.6;
-const PREVIEW_WIDTH = 3.3;
+const FRAME_WIDTH = COLS + 0.7;
+const WIDTH_FILL = 0.945; // Leave a little room for the neon glow and camera sway.
+const VIEW_BOTTOM = -0.8;
+const PREVIEW_Y = ROWS + 2.1;
+const PREVIEW_WIDTH = 11;
+const HOLD_X = -4.1;
+const NEXT_SLOTS = [-0.7, 1.75, 4.05];
+const VIEW_TOP = PREVIEW_Y + 1.6;
+const VIEW_HEIGHT = VIEW_TOP - VIEW_BOTTOM;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 function glowMaterial(opts) {
@@ -330,9 +336,11 @@ export class Scene3D {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.scene = new THREE.Scene();
+    // Fit the whole well on both axes, letting cells widen with the screen.
     this.camera = new THREE.PerspectiveCamera(30, 1, 1, 400);
-    this.center = new THREE.Vector3(0, 10.2, 0);
-    this.baseDistance = 50;
+    this.center = new THREE.Vector3(0, (VIEW_TOP + VIEW_BOTTOM) / 2, 0);
+    this.tanHalfFov = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
+    this.baseDistance = VIEW_HEIGHT / (2 * this.tanHalfFov);
 
     this.time = 0;
     this.trauma = 0;
@@ -352,6 +360,7 @@ export class Scene3D {
     this.buildBackground();
     this.buildWell();
     this.buildBlocks();
+    this.buildPreviews();
     this.sparks = new Sparks(this.scene);
     this.debris = new Debris(this.scene, this.blockGeo, this.debrisMat);
     this.buildRings();
@@ -455,27 +464,35 @@ export class Scene3D {
       const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, 0.4, 2, 0.12), this.frameMat);
       m.position.set(x, y, 0);
       g.add(m);
+      return m;
     };
-    bar(0.3, 20.9, -COLS / 2 - 0.2, 10.1);
-    bar(0.3, 20.9, COLS / 2 + 0.2, 10.1);
-    bar(COLS + 0.7, 0.3, 0, -0.2);
-    // Side panels for hold and next.
-    const panelMat = new THREE.MeshBasicMaterial({ color: 0x1d0f3d, transparent: true, opacity: 0.6 });
-    const rail = (text, y, h) => {
-      const rail = new THREE.Group();
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(3.2, h), panelMat);
-      m.position.set(0, y, -0.55);
-      const label = labelSprite(text);
-      label.position.y = 20.1;
-      rail.add(m, label);
-      g.add(rail);
-      return { group: rail, label };
-    };
-    this.holdRail = rail('HOLD', 17.8, 3.6);
-    this.nextRail = rail('NEXT', 15.1, 9);
-    this.holdPos = new THREE.Vector3(0, 17.6, 0);
-    this.nextPos = [17.6, 14.6, 11.9].map((y) => new THREE.Vector3(0, y, 0));
+    this.leftWall = bar(0.3, 20.9, 0, 10.1);
+    this.rightWall = bar(0.3, 20.9, 0, 10.1);
+    this.floor = bar(FRAME_WIDTH, 0.3, 0, -0.2);
     this.scene.add(g);
+  }
+
+  buildPreviews() {
+    this.previewRow = new THREE.Group();
+    this.previewRow.position.y = PREVIEW_Y;
+    this.scene.add(this.previewRow);
+
+    const panelMat = new THREE.MeshBasicMaterial({ color: 0x1d0f3d, transparent: true, opacity: 0.6 });
+    const panel = (text, x, width) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(width, 2.5), panelMat);
+      m.position.set(x, 0, -0.55);
+      const label = labelSprite(text);
+      label.position.set(x, 0.75, 0);
+      this.previewRow.add(m, label);
+    };
+    panel('HOLD', HOLD_X, 2.8);
+    panel('NEXT', 1.65, 7.7);
+
+    this.previews = new THREE.InstancedMesh(this.blockGeo, this.blockMat, 4 * 4);
+    this.previews.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.previews.frustumCulled = false;
+    this.previews.setColorAt(0, new THREE.Color());
+    this.previewRow.add(this.previews);
   }
 
   buildBlocks() {
@@ -484,7 +501,7 @@ export class Scene3D {
     this.blockMat = glowMaterial({ map, roughness: 0.28, metalness: 0.08 });
     this.debrisMat = glowMaterial({ map, roughness: 0.3, metalness: 0.1 });
     this.debrisMat.userData.glow.value = 0.35;
-    const max = COLS * ROWS + 4 + 4 * 4;
+    const max = COLS * ROWS + 4;
     this.blocks = new THREE.InstancedMesh(this.blockGeo, this.blockMat, max);
     this.blocks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.blocks.frustumCulled = false;
@@ -607,33 +624,28 @@ export class Scene3D {
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.bloom.resolution.set(w / 2, h / 2);
-    this.camera.aspect = w / h;
-    const vFov = THREE.MathUtils.degToRad(this.camera.fov);
-    const ch = CONTENT.top - CONTENT.bottom;
-    // On tall screens, narrow the preview rails before shrinking the well.
-    this.previewScale = THREE.MathUtils.clamp((ch * this.camera.aspect / 2 - PREVIEW_INNER_X) / PREVIEW_WIDTH, 0.72, 1);
-    const previewX = PREVIEW_INNER_X + 1.7 * this.previewScale;
-    for (const [rail, sign] of [[this.holdRail, -1], [this.nextRail, 1]]) {
-      rail.group.position.x = previewX * sign;
-      rail.group.scale.x = this.previewScale;
-      rail.label.scale.y = 0.8 * this.previewScale;
-    }
-    this.holdPos.x = -previewX;
-    for (const pos of this.nextPos) pos.x = previewX;
-    this.contentHalfWidth = PREVIEW_INNER_X + PREVIEW_WIDTH * this.previewScale;
-    const distH = ch / 2 / Math.tan(vFov / 2);
-    const distW = this.contentHalfWidth / (Math.tan(vFov / 2) * this.camera.aspect);
-    this.baseDistance = Math.max(distH, distW) * 1.02;
-    this.center.y = (CONTENT.top + CONTENT.bottom) / 2;
+    const wellPixels = w * WIDTH_FILL;
+    const row = h / VIEW_HEIGHT;
+    // Keep the frame trim slim even when the grid widens in landscape.
+    const frameScale = Math.min(1, row / (wellPixels / COLS));
+    const frameWidth = COLS + 0.7 * frameScale;
+    const viewWidth = frameWidth / WIDTH_FILL;
+    this.leftWall.scale.x = this.rightWall.scale.x = frameScale;
+    this.leftWall.position.x = -COLS / 2 - 0.2 * frameScale;
+    this.rightWall.position.x = -this.leftWall.position.x;
+    this.floor.scale.x = frameWidth / FRAME_WIDTH;
+    this.camera.aspect = viewWidth / VIEW_HEIGHT;
     this.camera.updateProjectionMatrix();
-    this.sparks.material.uniforms.uScale.value = (h * this.renderer.getPixelRatio()) / (2 * Math.tan(vFov / 2));
-    this.cssHeight = h;
+    this.cellSize = { x: w / viewWidth, y: row };
+    // Cancel the well's horizontal stretch for the preview pieces and labels.
+    const previewScale = Math.min(1, wellPixels / (PREVIEW_WIDTH * row));
+    this.previewRow.scale.set(previewScale * this.cellSize.y / this.cellSize.x, previewScale, previewScale);
+    this.sparks.material.uniforms.uScale.value = (h * this.renderer.getPixelRatio()) / (2 * this.tanHalfFov);
   }
 
-  // Screen pixels per board cell, used to map drag distance to moves.
+  // Screen pixels per board column and row, used to map drag distance to moves.
   cellPixels() {
-    const vFov = THREE.MathUtils.degToRad(this.camera.fov);
-    return this.cssHeight / (2 * Math.tan(vFov / 2) * this.baseDistance);
+    return this.cellSize;
   }
 
   addTrauma(t) {
@@ -1007,8 +1019,20 @@ export class Scene3D {
       }
       this.ghostMat.opacity = 0.45 + 0.12 * Math.sin(t * 5);
     }
-    // Hold and next previews.
-    const preview = (kind, at, scale, dim) => {
+    m.count = i;
+    m.instanceMatrix.needsUpdate = true;
+    m.instanceColor.needsUpdate = true;
+    ghostMesh.instanceMatrix.needsUpdate = true;
+    ghostMesh.instanceColor.needsUpdate = true;
+
+    this.drawPreviews(game);
+  }
+
+  drawPreviews(game) {
+    const d = this.dummy;
+    const m = this.previews;
+    let i = 0;
+    const preview = (kind, x, scale, dim) => {
       const cells = ROTATIONS[kind][0];
       let minX = 9, maxX = -9, minY = 9, maxY = -9;
       for (const [cx, cy] of cells) {
@@ -1019,26 +1043,23 @@ export class Scene3D {
       }
       const ox = (minX + maxX) / 2;
       const oy = (minY + maxY) / 2;
-      const spin = Math.sin(t * 1.2 + at.y) * 0.25;
+      const spin = Math.sin(this.time * 1.2 + x) * 0.25;
       for (const [cx, cy] of cells) {
-        d.position.set(at.x + (cx - ox) * scale, at.y - (cy - oy) * scale, 0);
+        const dx = (cx - ox) * scale;
+        d.position.set(x + dx * Math.cos(spin), -0.42 - (cy - oy) * scale, -dx * Math.sin(spin));
         d.rotation.set(0, spin, 0);
         d.scale.setScalar(scale);
-        d.position.x = at.x + (cx - ox) * scale * Math.cos(spin);
-        d.position.z = -(cx - ox) * scale * Math.sin(spin);
         d.updateMatrix();
         m.setMatrixAt(i, d.matrix);
         m.setColorAt(i, this.tmpColor.copy(KIND_COLOR[kind]).multiplyScalar(dim ? 0.35 : 1));
         i++;
       }
     };
-    if (game.hold) preview(game.hold, this.holdPos, 0.62 * this.previewScale, game.holdUsed);
-    game.queue.slice(0, 3).forEach((k, n) => preview(k, this.nextPos[n], (n === 0 ? 0.62 : 0.5) * this.previewScale, false));
+    if (game.hold) preview(game.hold, HOLD_X, 0.62, game.holdUsed);
+    game.queue.slice(0, 3).forEach((k, n) => preview(k, NEXT_SLOTS[n], n === 0 ? 0.62 : 0.5, false));
     m.count = i;
     m.instanceMatrix.needsUpdate = true;
-    if (m.instanceColor) m.instanceColor.needsUpdate = true;
-    ghostMesh.instanceMatrix.needsUpdate = true;
-    if (ghostMesh.instanceColor) ghostMesh.instanceColor.needsUpdate = true;
+    m.instanceColor.needsUpdate = true;
   }
 
   updateEffects(realDt, dt) {

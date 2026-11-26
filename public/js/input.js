@@ -106,28 +106,30 @@ export class Input {
       g.samples.push({ y: e.clientY, t: now });
       // Keep about the last 120 ms of movement, but always at least two samples.
       while (g.samples.length > 2 && now - g.samples[1].t > 120) g.samples.shift();
-      const cell = Math.max(18, this.cellPixels() * 0.9);
+      const { x, y } = this.cellPixels();
+      const column = Math.max(18, x * 0.9);
+      const row = Math.max(18, y * 0.9);
       let dx = e.clientX - g.ax;
-      while (Math.abs(dx) >= cell) {
+      while (Math.abs(dx) >= column) {
         const step = Math.sign(dx);
         this.actions.move(step);
-        g.ax += step * cell;
+        g.ax += step * column;
         dx = e.clientX - g.ax;
         g.moved = true;
       }
       const totalDy = e.clientY - g.y0;
       const totalDx = Math.abs(e.clientX - g.x0);
-      if (totalDy > cell * 1.2 && totalDy > totalDx * 1.5) {
+      if (totalDy > row * 1.2 && totalDy > totalDx * 1.5) {
         let dy = e.clientY - g.ay;
         if (!g.dropping) {
           g.dropping = true;
           g.ay = e.clientY;
           dy = 0;
         }
-        while (dy >= cell) {
+        while (dy >= row) {
           this.actions.soft();
-          g.ay += cell;
-          dy -= cell;
+          g.ay += row;
+          dy -= row;
         }
         g.moved = true;
       } else if (!g.dropping) {
