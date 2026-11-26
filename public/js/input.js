@@ -35,6 +35,7 @@ export class Input {
   releaseAll() {
     this.held.clear();
     this.softHeld = false;
+    this.cancelGesture();
   }
 
   // Called every frame for auto-repeat of held moves.
@@ -76,7 +77,7 @@ export class Input {
         return;
       }
       const cmd = map[e.code];
-      if (!cmd) return;
+      if (!cmd || !this.enabled()) return;
       e.preventDefault();
       if (e.repeat) return;
       this.actions.unlock();
@@ -93,6 +94,10 @@ export class Input {
   // flick down to slam, flick up to hold, tap to rotate.
   bindGestures(stage) {
     let g = null;
+    this.cancelGesture = () => {
+      if (g && stage.hasPointerCapture?.(g.id)) stage.releasePointerCapture(g.id);
+      g = null;
+    };
     stage.addEventListener('pointerdown', (e) => {
       if (g || !this.enabled()) return;
       this.actions.unlock();
@@ -106,30 +111,28 @@ export class Input {
       g.samples.push({ y: e.clientY, t: now });
       // Keep about the last 120 ms of movement, but always at least two samples.
       while (g.samples.length > 2 && now - g.samples[1].t > 120) g.samples.shift();
-      const { x, y } = this.cellPixels();
-      const column = Math.max(18, x * 0.9);
-      const row = Math.max(18, y * 0.9);
+      const cell = Math.max(18, this.cellPixels() * 0.9);
       let dx = e.clientX - g.ax;
-      while (Math.abs(dx) >= column) {
+      while (Math.abs(dx) >= cell) {
         const step = Math.sign(dx);
         this.actions.move(step);
-        g.ax += step * column;
+        g.ax += step * cell;
         dx = e.clientX - g.ax;
         g.moved = true;
       }
       const totalDy = e.clientY - g.y0;
       const totalDx = Math.abs(e.clientX - g.x0);
-      if (totalDy > row * 1.2 && totalDy > totalDx * 1.5) {
+      if (totalDy > cell * 1.2 && totalDy > totalDx * 1.5) {
         let dy = e.clientY - g.ay;
         if (!g.dropping) {
           g.dropping = true;
           g.ay = e.clientY;
           dy = 0;
         }
-        while (dy >= row) {
+        while (dy >= cell) {
           this.actions.soft();
-          g.ay += row;
-          dy -= row;
+          g.ay += cell;
+          dy -= cell;
         }
         g.moved = true;
       } else if (!g.dropping) {

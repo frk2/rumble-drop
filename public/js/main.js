@@ -10,6 +10,7 @@ const overlay = $('#overlay');
 const popups = $('#popups');
 const flash = $('#flash');
 const hud = { score: $('#score'), level: $('#level'), lines: $('#lines') };
+const landscape = window.matchMedia('(orientation: landscape)');
 
 const params = new URLSearchParams(location.search);
 const seed = params.has('seed') ? Number(params.get('seed')) : undefined;
@@ -30,7 +31,7 @@ let clearHold = 0;
 let best = 0;
 let shownScore = 0;
 
-const playing = () => state === 'play' && clearHold <= 0;
+const playing = () => !landscape.matches && state === 'play' && clearHold <= 0;
 
 const actions = {
   unlock: unlockAudio,
@@ -50,6 +51,7 @@ const actions = {
     game.holdPiece();
   },
   pause() {
+    if (landscape.matches) return;
     if (state === 'play') pause();
     else if (state === 'paused') resume();
   },
@@ -85,10 +87,15 @@ function showOverlay(kind) {
     text.textContent = `Score ${game.score.toLocaleString()} · ${game.lines} lines${isBest ? ' · Best this session!' : ` · Best ${best.toLocaleString()}`}`;
     play.textContent = 'Play again';
   }
-  (kind === 'paused' ? resumeBtn : play).focus({ preventScroll: true });
+  if (!landscape.matches) focusOverlay();
+}
+
+function focusOverlay() {
+  $(state === 'paused' ? '#resume' : '#play').focus({ preventScroll: true });
 }
 
 function start() {
+  if (landscape.matches) return;
   unlockAudio();
   input.releaseAll();
   game.reset();
@@ -114,11 +121,23 @@ function pause() {
 }
 
 function resume() {
+  if (landscape.matches) return;
   unlockAudio();
   state = 'play';
   overlay.hidden = true;
   stage.focus({ preventScroll: true });
   music.resume();
+}
+
+function syncOrientation() {
+  if (landscape.matches) {
+    if (state === 'play') pause();
+    $('#orientation-status').hidden = state !== 'paused';
+    $('#orientation-title').focus({ preventScroll: true });
+  } else {
+    scene.resize();
+    if (!overlay.hidden) focusOverlay();
+  }
 }
 
 $('#play').addEventListener('click', start);
@@ -292,6 +311,8 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  requestAnimationFrame(frame);
+  if (landscape.matches) return;
   if (state === 'play') {
     if (clearHold > 0) clearHold -= dt;
     else {
@@ -302,10 +323,12 @@ function frame(now) {
   for (const ev of game.drainEvents()) handle(ev);
   updateHud();
   scene.render(dt, game, { showPiece: state !== 'title' && clearHold <= 0, paused: state === 'paused' });
-  requestAnimationFrame(frame);
 }
 
-new ResizeObserver(() => scene.resize()).observe(canvas);
+new ResizeObserver(() => {
+  if (!landscape.matches) scene.resize();
+}).observe(canvas);
+landscape.addEventListener('change', syncOrientation);
 // iOS: stop pinch zoom and double-tap zoom from hijacking play.
 for (const t of ['gesturestart', 'gesturechange', 'dblclick']) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
 document.addEventListener('touchmove', (e) => {
@@ -314,6 +337,7 @@ document.addEventListener('touchmove', (e) => {
 
 game.drainEvents();
 showOverlay('title');
+if (landscape.matches) syncOrientation();
 requestAnimationFrame(frame);
 
 // Small hook for automated checks.

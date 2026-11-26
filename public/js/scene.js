@@ -26,13 +26,12 @@ export function cellToWorld(x, y, out = new THREE.Vector3()) {
 }
 
 const FRAME_WIDTH = COLS + 0.7;
-const WIDTH_FILL = 0.945; // Leave a little room for the neon glow and camera sway.
-const VIEW_BOTTOM = -0.8;
-const PREVIEW_Y = ROWS + 2.1;
-const PREVIEW_WIDTH = 11;
+const VIEW_WIDTH = 11.6; // Room for the previews and neon trim on narrow screens.
+const VIEW_BOTTOM = -0.7;
+const PREVIEW_Y = ROWS + 1.2;
 const HOLD_X = -4.1;
 const NEXT_SLOTS = [-0.7, 1.75, 4.05];
-const VIEW_TOP = PREVIEW_Y + 1.6;
+const VIEW_TOP = PREVIEW_Y + 1.15;
 const VIEW_HEIGHT = VIEW_TOP - VIEW_BOTTOM;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -336,11 +335,9 @@ export class Scene3D {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.scene = new THREE.Scene();
-    // Fit the whole well on both axes, letting cells widen with the screen.
     this.camera = new THREE.PerspectiveCamera(30, 1, 1, 400);
     this.center = new THREE.Vector3(0, (VIEW_TOP + VIEW_BOTTOM) / 2, 0);
     this.tanHalfFov = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
-    this.baseDistance = VIEW_HEIGHT / (2 * this.tanHalfFov);
 
     this.time = 0;
     this.trauma = 0;
@@ -464,11 +461,10 @@ export class Scene3D {
       const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, 0.4, 2, 0.12), this.frameMat);
       m.position.set(x, y, 0);
       g.add(m);
-      return m;
     };
-    this.leftWall = bar(0.3, 20.9, 0, 10.1);
-    this.rightWall = bar(0.3, 20.9, 0, 10.1);
-    this.floor = bar(FRAME_WIDTH, 0.3, 0, -0.2);
+    bar(0.3, 20.9, -COLS / 2 - 0.2, 10.1);
+    bar(0.3, 20.9, COLS / 2 + 0.2, 10.1);
+    bar(FRAME_WIDTH, 0.3, 0, -0.2);
     this.scene.add(g);
   }
 
@@ -479,10 +475,10 @@ export class Scene3D {
 
     const panelMat = new THREE.MeshBasicMaterial({ color: 0x1d0f3d, transparent: true, opacity: 0.6 });
     const panel = (text, x, width) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(width, 2.5), panelMat);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(width, 1.8), panelMat);
       m.position.set(x, 0, -0.55);
       const label = labelSprite(text);
-      label.position.set(x, 0.75, 0);
+      label.position.set(x, 0.55, 0);
       this.previewRow.add(m, label);
     };
     panel('HOLD', HOLD_X, 2.8);
@@ -624,26 +620,16 @@ export class Scene3D {
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.bloom.resolution.set(w / 2, h / 2);
-    const wellPixels = w * WIDTH_FILL;
-    const row = h / VIEW_HEIGHT;
-    // Keep the frame trim slim even when the grid widens in landscape.
-    const frameScale = Math.min(1, row / (wellPixels / COLS));
-    const frameWidth = COLS + 0.7 * frameScale;
-    const viewWidth = frameWidth / WIDTH_FILL;
-    this.leftWall.scale.x = this.rightWall.scale.x = frameScale;
-    this.leftWall.position.x = -COLS / 2 - 0.2 * frameScale;
-    this.rightWall.position.x = -this.leftWall.position.x;
-    this.floor.scale.x = frameWidth / FRAME_WIDTH;
-    this.camera.aspect = viewWidth / VIEW_HEIGHT;
+    // A single scale keeps the cells square. Height usually limits the
+    // 20-row well in portrait, but narrow phones can be width-limited.
+    this.cellSize = Math.min(w / VIEW_WIDTH, h / VIEW_HEIGHT);
+    this.baseDistance = h / (2 * this.tanHalfFov * this.cellSize);
+    this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.cellSize = { x: w / viewWidth, y: row };
-    // Cancel the well's horizontal stretch for the preview pieces and labels.
-    const previewScale = Math.min(1, wellPixels / (PREVIEW_WIDTH * row));
-    this.previewRow.scale.set(previewScale * this.cellSize.y / this.cellSize.x, previewScale, previewScale);
     this.sparks.material.uniforms.uScale.value = (h * this.renderer.getPixelRatio()) / (2 * this.tanHalfFov);
   }
 
-  // Screen pixels per board column and row, used to map drag distance to moves.
+  // Screen pixels per board cell, used to map drag distance to moves.
   cellPixels() {
     return this.cellSize;
   }
@@ -1046,7 +1032,7 @@ export class Scene3D {
       const spin = Math.sin(this.time * 1.2 + x) * 0.25;
       for (const [cx, cy] of cells) {
         const dx = (cx - ox) * scale;
-        d.position.set(x + dx * Math.cos(spin), -0.42 - (cy - oy) * scale, -dx * Math.sin(spin));
+        d.position.set(x + dx * Math.cos(spin), -0.28 - (cy - oy) * scale, -dx * Math.sin(spin));
         d.rotation.set(0, spin, 0);
         d.scale.setScalar(scale);
         d.updateMatrix();
@@ -1055,8 +1041,8 @@ export class Scene3D {
         i++;
       }
     };
-    if (game.hold) preview(game.hold, HOLD_X, 0.62, game.holdUsed);
-    game.queue.slice(0, 3).forEach((k, n) => preview(k, NEXT_SLOTS[n], n === 0 ? 0.62 : 0.5, false));
+    if (game.hold) preview(game.hold, HOLD_X, 0.52, game.holdUsed);
+    game.queue.slice(0, 3).forEach((k, n) => preview(k, NEXT_SLOTS[n], n === 0 ? 0.52 : 0.43, false));
     m.count = i;
     m.instanceMatrix.needsUpdate = true;
     m.instanceColor.needsUpdate = true;
