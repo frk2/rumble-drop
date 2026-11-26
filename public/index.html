@@ -36,38 +36,10 @@
   </header>
 
   <main class="play">
-    <div id="stage" class="stage" aria-label="Game board. Tap to turn, drag to move, flick down to slam, flick up to hold.">
+    <div id="stage" class="stage" role="group" aria-label="Game board. Tap to turn, drag sideways to move, drag down slowly to drop faster, flick down to slam, flick up to hold.">
       <canvas id="game"></canvas>
       <div id="flash" class="flash" aria-hidden="true"></div>
       <div id="popups" class="popups" aria-live="polite"></div>
-    </div>
-
-    <div class="pad pad-left" role="group" aria-label="Move">
-      <button class="ctl" type="button" data-cmd="left" aria-label="Move left">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-      </button>
-      <button class="ctl" type="button" data-cmd="right" aria-label="Move right">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
-      </button>
-      <button class="ctl ctl-wide" type="button" data-cmd="soft" aria-label="Drop faster">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7"/></svg>
-      </button>
-    </div>
-
-    <div class="pad pad-right" role="group" aria-label="Turn, hold and slam">
-      <button class="ctl" type="button" data-cmd="ccw" aria-label="Turn left">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4L5 8l4 4"/><path d="M5 8h8a6 6 0 1 1-6 6"/></svg>
-      </button>
-      <button class="ctl" type="button" data-cmd="cw" aria-label="Turn right">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l4 4-4 4"/><path d="M19 8h-8a6 6 0 1 0 6 6"/></svg>
-      </button>
-      <button class="ctl ctl-hold" type="button" data-cmd="hold" aria-label="Hold piece">
-        <span>Hold</span>
-      </button>
-      <button class="ctl ctl-slam" type="button" data-cmd="slam" aria-label="Slam down">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5l6 6 6-6M6 11l6 6 6-6"/><path d="M5 21h14"/></svg>
-        <span>Slam</span>
-      </button>
     </div>
   </main>
 
@@ -80,12 +52,13 @@
         <button id="play" class="big-btn primary" type="button">Play</button>
       </div>
       <ul class="howto">
-        <li><b>Tap</b> the board to turn</li>
+        <li><b>Tap</b> to turn right<br>Three taps turn left</li>
         <li><b>Drag</b> left or right to move</li>
+        <li><b>Drag down slowly</b> to drop faster</li>
         <li><b>Flick down</b> to slam</li>
         <li><b>Flick up</b> to hold a piece</li>
       </ul>
-      <p class="keys">Keyboard: arrows move and turn, Space slams, C holds, P pauses.</p>
+      <p class="keys">Keyboard: ←/→ move, ↓ drops faster, ↑/Z turn right/left, Space slams, C holds, P pauses.</p>
     </div>
   </section>
 

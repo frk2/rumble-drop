@@ -1,16 +1,15 @@
-// Touch, button and keyboard input. Calls actions.<name>() for each command.
+// Board gestures and keyboard input. Calls actions.<name>() for each command.
 
 const DAS = 0.17; // seconds before a held move starts repeating
 const ARR = 0.045; // seconds between repeats
 
 export class Input {
-  constructor({ stage, buttons, actions, cellPixels, enabled }) {
+  constructor({ stage, actions, cellPixels, enabled }) {
     this.actions = actions;
     this.cellPixels = cellPixels;
     this.enabled = enabled;
-    this.held = new Map(); // command -> { t, repeated }
+    this.held = new Map(); // command -> { t, next }
     this.softHeld = false;
-    this.bindButtons(buttons);
     this.bindKeys();
     this.bindGestures(stage);
   }
@@ -48,34 +47,6 @@ export class Input {
         h.next += ARR;
         this.actions.move(cmd === 'left' ? -1 : 1);
       }
-    }
-  }
-
-  bindButtons(buttons) {
-    for (const b of buttons) {
-      const cmd = b.dataset.cmd;
-      b.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        b.setPointerCapture?.(e.pointerId);
-        b.classList.add('down');
-        this.actions.unlock();
-        this.press(cmd);
-      });
-      const up = () => {
-        b.classList.remove('down');
-        this.release(cmd);
-      };
-      b.addEventListener('pointerup', up);
-      b.addEventListener('pointercancel', up);
-      b.addEventListener('lostpointercapture', up);
-      // Keyboard activation of a focused button (Enter / Space).
-      b.addEventListener('click', (e) => {
-        if (e.detail === 0) {
-          this.press(cmd);
-          this.release(cmd);
-        }
-      });
-      b.addEventListener('contextmenu', (e) => e.preventDefault());
     }
   }
 
