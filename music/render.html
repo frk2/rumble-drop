@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Rumble Drop theme render</title>
+<script type="module">
+// Renders the theme offline. render.mjs opens this page in headless Chrome and calls render().
+import { createSynth } from './synth.js';
+import { SECTION_STEPS, STEPS_PER_BAR, STEP_SECONDS, SECTIONS, LOOP_START, INTRO_SECONDS, SONG_SECONDS } from './score.js';
+
+const SR = 44100;
+const PEAK = 0.89; // -1 dBFS
+
+window.render = async () => {
+  // Play the intro and the loop twice, then keep the intro and the second pass. The second
+  // pass opens with the echo tails of the first pass's ending, so the loop wraps seamlessly.
+  const loopSteps = (SECTIONS.length - LOOP_START) * SECTION_STEPS;
+  const totalSteps = LOOP_START * SECTION_STEPS + 2 * loopSteps;
+  const seconds = totalSteps * STEP_SECONDS;
+  const ctx = new OfflineAudioContext(1, Math.round(seconds * SR), SR);
+  const noise = ctx.createBuffer(1, SR, SR);
+  const nd = noise.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  // A gentle compressor glues the mix and tames the kick's peaks before normalizing.
+  const glue = ctx.createDynamicsCompressor();
+  glue.threshold.value = -12;
+  glue.knee.value = 6;
+  glue.ratio.value = 4;
+  glue.attack.value = 0.004;
+  glue.release.value = 0.12;
+  glue.connect(ctx.destination);
+  const synth = createSynth(ctx, glue, noise);
+
+  // Feed it a bar at a time, the way a live scheduler would, so only a few notes are queued.
+  let step = 0;
+  const feedBar = () => {
+    for (let end = Math.min(step + STEPS_PER_BAR, totalSteps); step < end; step++) synth.schedule(step, step * STEP_SECONDS);
+  };
+  feedBar();
+  const barSeconds = STEPS_PER_BAR * STEP_SECONDS;
+  for (let k = 1; k * barSeconds < seconds; k++) {
+    const at = Math.round((k * barSeconds - 0.2) * SR / 128) * 128 / SR;
+    ctx.suspend(at).then(() => { feedBar(); ctx.resume(); });
+  }
+  const buf = await ctx.startRendering();
+
+  const all = buf.getChannelData(0);
+  const intro = Math.round(INTRO_SECONDS * SR);
+  const loop = Math.round((SONG_SECONDS - INTRO_SECONDS) * SR);
+  const song = new Float32Array(intro + loop);
+  song.set(all.subarray(0, intro), 0);
+  song.set(all.subarray(intro + loop, intro + 2 * loop), intro);
+
+  let peak = 0;
+  for (const v of song) peak = Math.max(peak, Math.abs(v));
+  const gain = PEAK / peak;
+
+  const wav = new DataView(new ArrayBuffer(44 + song.length * 2));
+  const tag = (o, s) => [...s].forEach((c, i) => wav.setUint8(o + i, c.charCodeAt(0)));
+  tag(0, 'RIFF'); wav.setUint32(4, 36 + song.length * 2, true); tag(8, 'WAVEfmt ');
+  wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true);
+  wav.setUint32(24, SR, true); wav.setUint32(28, SR * 2, true); wav.setUint16(32, 2, true);
+  wav.setUint16(34, 16, true); tag(36, 'data'); wav.setUint32(40, song.length * 2, true);
+  for (let i = 0; i < song.length; i++) wav.setInt16(44 + i * 2, Math.max(-1, Math.min(1, song[i] * gain)) * 32767, true);
+  const bytes = new Uint8Array(wav.buffer);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { wav: btoa(bin), rawPeak: peak, samples: song.length, sampleRate: SR };
+};
+window.ready = true;
+</script>

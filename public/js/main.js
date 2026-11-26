@@ -1,7 +1,7 @@
 import { Game } from './logic.js';
 import { Scene3D } from './scene.js';
 import { Input } from './input.js';
-import { sfx, unlockAudio, setMuted, isMuted } from './audio.js';
+import { sfx, music, unlockAudio, setMuted, isMuted } from './audio.js';
 
 const $ = (s) => document.querySelector(s);
 const canvas = $('#game');
@@ -102,12 +102,14 @@ function start() {
   $('#pause').disabled = false;
   updateHud(true);
   sfx.start();
+  music.play();
   popup('GO!', 'go');
 }
 
 function pause() {
   state = 'paused';
   input.releaseAll();
+  music.pause();
   showOverlay('paused');
 }
 
@@ -115,6 +117,7 @@ function resume() {
   unlockAudio();
   state = 'play';
   overlay.hidden = true;
+  music.resume();
 }
 
 $('#play').addEventListener('click', start);
@@ -127,6 +130,23 @@ muteBtn.addEventListener('click', () => {
   muteBtn.setAttribute('aria-pressed', String(isMuted()));
   muteBtn.setAttribute('aria-label', isMuted() ? 'Sound off' : 'Sound on');
 });
+// Music switches: one in the header (wide screens) and one on the start and pause card.
+const musicBtn = $('#music');
+const musicCard = $('#music-card');
+function showMusic() {
+  const on = music.isOn();
+  musicBtn.setAttribute('aria-pressed', String(on));
+  musicCard.setAttribute('aria-pressed', String(on));
+  musicCard.querySelector('span').textContent = on ? 'Music on' : 'Music off';
+}
+for (const btn of [musicBtn, musicCard]) {
+  btn.addEventListener('click', () => {
+    unlockAudio();
+    music.setOn(!music.isOn());
+    showMusic();
+  });
+}
+showMusic();
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && state === 'play') pause();
 });
@@ -216,6 +236,8 @@ function handle(ev) {
         scene.clear(ev);
         clearHold = 0.16 + n * 0.06 + 0.08;
         sfx.clear(n, Math.max(0, ev.combo));
+        // Let the bigger blasts punch through the music.
+        if (n >= 2) music.duck(n >= 4 ? 0.25 : 0.5, n >= 4 ? 1.1 : 0.3);
         setTimeout(() => {
           popup(CLEAR_WORDS[n], CLEAR_CLASS[n], `+${ev.gained.toLocaleString()}`);
           if (ev.perfect) setTimeout(() => popup('PERFECT FIT!', 'perfect small'), 160);
@@ -240,6 +262,7 @@ function handle(ev) {
       input.releaseAll();
       scene.gameOver(game.board);
       sfx.gameover();
+      music.end();
       shakeDom(2);
       $('#pause').disabled = true;
       setTimeout(() => showOverlay('over'), 1300);
@@ -291,4 +314,4 @@ showOverlay('title');
 requestAnimationFrame(frame);
 
 // Small hook for automated checks.
-window.rumble = { game, scene, start, handle, state: () => state };
+window.rumble = { game, scene, start, handle, music, state: () => state };
