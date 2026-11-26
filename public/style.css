@@ -228,6 +228,11 @@ emptyos-badge { flex: none; min-width: 104px; display: flex; justify-content: fl
   z-index: 5;
 }
 .overlay[hidden] { display: none; }
+#orientation { display: none; }
+@media (orientation: landscape) {
+  .top, .play, #overlay { display: none; }
+  #orientation { display: grid; }
+}
 .card {
   width: min(440px, 100%);
   padding: 28px 24px 22px;
@@ -250,6 +255,20 @@ emptyos-badge { flex: none; min-width: 104px; display: flex; justify-content: fl
 }
 .overlay[data-kind="paused"] .card h2, .overlay[data-kind="over"] .card h2 { background: none; color: var(--text); }
 .card p { margin: 0 0 20px; font-size: 17px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
+.orientation-icon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 10px;
+  fill: none;
+  stroke: var(--accent-2);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 8px rgba(63, 216, 255, 0.55));
+}
+.orientation-card p { margin-bottom: 0; }
+#orientation-title:focus { outline: none; }
+#orientation-status { margin-top: 12px; color: var(--text); }
 .card-actions { display: flex; gap: 12px; justify-content: center; margin-bottom: 20px; }
 .big-btn {
   min-width: 140px;

@@ -35,6 +35,7 @@ export class Input {
   releaseAll() {
     this.held.clear();
     this.softHeld = false;
+    this.cancelGesture();
   }
 
   // Called every frame for auto-repeat of held moves.
@@ -76,7 +77,7 @@ export class Input {
         return;
       }
       const cmd = map[e.code];
-      if (!cmd) return;
+      if (!cmd || !this.enabled()) return;
       e.preventDefault();
       if (e.repeat) return;
       this.actions.unlock();
@@ -93,6 +94,10 @@ export class Input {
   // flick down to slam, flick up to hold, tap to rotate.
   bindGestures(stage) {
     let g = null;
+    this.cancelGesture = () => {
+      if (g && stage.hasPointerCapture?.(g.id)) stage.releasePointerCapture(g.id);
+      g = null;
+    };
     stage.addEventListener('pointerdown', (e) => {
       if (g || !this.enabled()) return;
       this.actions.unlock();
