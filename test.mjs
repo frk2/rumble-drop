@@ -1,10 +1,42 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { Game, KINDS, ROTATIONS, COLS, ROWS, emptyBoard, collides, pieceCells } from './public/js/logic.js';
+import { fitScene, PHONE_PREVIEW_HEIGHT, PHONE_PREVIEW_Y } from './public/js/scene-layout.js';
 
 const fill = (board, y, except = []) => {
   for (let x = 0; x < COLS; x++) if (!except.includes(x)) board[y][x] = 'O';
 };
+
+test('phone scene fits the well, previews and shake in both kinds of limiting viewport', () => {
+  for (const [width, height] of [[375, 681], [390, 601], [428, 798], [402, 730], [320, 815]]) {
+    const { cellSize, centerY } = fitScene(width, height, true);
+    const toScreen = (y) => height / 2 - (y - centerY) * cellSize;
+    assert.ok(toScreen(PHONE_PREVIEW_Y + PHONE_PREVIEW_HEIGHT / 2) >= 4);
+    assert.ok(toScreen(-0.35) <= height - 4);
+    assert.ok((width - 11 * cellSize) / 2 >= 4);
+  }
+});
+
+test('the default scene framing still matches the iPad portrait layout', () => {
+  for (const [width, height] of [[744, 1040], [390, 1040]]) {
+    assert.deepEqual(fitScene(width, height), {
+      cellSize: Math.min(width / 11.6, height / (ROWS + 1.2 + 1.15 + 0.7)),
+      centerY: (ROWS + 1.2 + 1.15 - 0.7) / 2,
+    });
+  }
+});
+
+test('the standalone web app has locally served install icons', () => {
+  const dir = new URL('./public/', import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL('manifest.webmanifest', dir), 'utf8'));
+  assert.equal(manifest.display, 'standalone');
+  assert.equal(new URL(manifest.start_url, dir).href, dir.href);
+  for (const icon of manifest.icons) assert.ok(readFileSync(new URL(icon.src, dir)).length > 0);
+  const png = readFileSync(new URL('icon-180.png', dir));
+  assert.equal(png.readUInt32BE(16), 180);
+  assert.equal(png.readUInt32BE(20), 180);
+});
 
 test('all seven pieces exist with four cells in every rotation', () => {
   assert.deepEqual([...KINDS].sort(), ['I', 'J', 'L', 'O', 'S', 'T', 'Z']);

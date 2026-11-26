@@ -117,6 +117,28 @@ emptyos-badge { flex: none; min-width: 104px; display: flex; justify-content: fl
   #mute { display: none; }
 }
 
+/* Keep a single, safe-area-aware HUD row on phone-sized touch screens. */
+.phone { --play-height: var(--phone-height, 100%); }
+@supports (height: 100dvh) {
+  .phone { --play-height: min(100dvh, var(--phone-height, 100dvh)); }
+}
+.phone body, .phone .overlay { height: var(--play-height); }
+.phone .overlay { bottom: auto; }
+.phone .top {
+  gap: 8px;
+  padding: max(2px, var(--safe-t)) calc(10px + var(--safe-r)) 2px calc(10px + var(--safe-l));
+}
+.phone .brand { position: static; width: auto; height: auto; font-size: 16px; }
+.phone .brand span { display: block; }
+.phone .stats { gap: clamp(6px, 2.5vw, 12px); margin: 0 auto; }
+.phone .stats div { align-items: center; }
+.phone .stats dt { font-size: 10px; }
+.phone .stats dd { font-size: 17px; }
+.phone .top-actions { flex: none; gap: 4px; }
+.phone .top-actions .icon-btn { width: 44px; }
+.phone #mute { display: grid; }
+.phone emptyos-badge { min-width: 0; }
+
 /* ---------- play area ---------- */
 .play {
   display: grid;

@@ -1,0 +1,14 @@
+{
+  "name": "Rumble Drop",
+  "short_name": "Rumble Drop",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#120726",
+  "theme_color": "#120726",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
