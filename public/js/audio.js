@@ -1,9 +1,21 @@
-// Synthesized sound effects. Nothing is downloaded; every sound is made with Web Audio.
+// Sound effects are synthesized with Web Audio. The music is one file, audio/theme.m4a,
+// composed for this game (see music/), decoded once and looped without a gap.
+
+import { THEME } from './theme.js';
+
+const MUSIC_KEY = 'rumble-drop:music';
+const MUSIC_VOLUME = 0.6;
 
 let ctx = null;
 let master = null;
 let muted = false;
 let noiseBuffer = null;
+
+// Start downloading the music as soon as the page loads; it is decoded after the first touch.
+const themeBytes = fetch(THEME.url).then((r) => {
+  if (!r.ok) throw new Error(`${THEME.url}: ${r.status}`);
+  return r.arrayBuffer();
+});
 
 export function unlockAudio() {
   if (!ctx) {
@@ -19,18 +31,163 @@ export function unlockAudio() {
     noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuffer.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    duckGain = ctx.createGain();
+    duckGain.connect(master);
+    loadTheme();
+    // iOS Safari stops the context during a call or a trip to the home screen.
+    ctx.addEventListener('statechange', syncMusic);
   }
-  if (ctx.state === 'suspended') ctx.resume();
+  if (ctx.state !== 'running') ctx.resume().then(syncMusic, () => {});
+  syncMusic();
 }
 
 export function setMuted(m) {
   muted = m;
   if (master) master.gain.setTargetAtTime(m ? 0 : 0.55, ctx.currentTime, 0.02);
+  syncMusic();
 }
 
 export function isMuted() {
   return muted;
 }
+
+// ---------- music ----------
+// The game says what it wants (playing, paused, stopped); the track plays only while the game
+// is playing, music is on, sound is not muted, and the file is ready.
+const song = { want: 'stopped', on: loadMusicOn() };
+let theme = null; // decoded AudioBuffer
+let lead = 0; // seconds of silence a decoder left at the start of the file, if any
+let duckGain = null;
+let voice = null; // { src, gain } while playing
+let startedAt = 0; // context time at which file position 0 would have played
+let offset = 0; // file position to start from next time
+
+function loadMusicOn() {
+  try {
+    return localStorage.getItem(MUSIC_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+function loadTheme() {
+  themeBytes
+    .then((bytes) => new Promise((resolve, reject) => ctx.decodeAudioData(bytes, resolve, reject)))
+    .then((buffer) => {
+      theme = buffer;
+      lead = leadingSilence(buffer);
+      syncMusic();
+    })
+    .catch((err) => console.warn('Rumble Drop: the music could not load.', err));
+}
+
+// The track starts on a kick. AAC files carry encoder priming that decoders normally trim; if one
+// does not, skip the silence it leaves so the loop points still land on the beat.
+function leadingSilence(buffer) {
+  const d = buffer.getChannelData(0);
+  const limit = Math.min(d.length, Math.round(buffer.sampleRate * 0.25));
+  for (let i = 0; i < limit; i++) {
+    if (Math.abs(d[i]) > 0.02) {
+      const extra = i / buffer.sampleRate - THEME.onset;
+      return extra > 0.005 ? extra : 0;
+    }
+  }
+  return 0;
+}
+
+// Where in the file the music is now: the intro once, then round and round the loop.
+function position() {
+  const t = ctx.currentTime - startedAt;
+  if (t < THEME.loopEnd) return t;
+  const len = THEME.loopEnd - THEME.loopStart;
+  return THEME.loopStart + ((t - THEME.loopStart) % len);
+}
+
+function startTheme() {
+  const now = ctx.currentTime;
+  const src = ctx.createBufferSource();
+  src.buffer = theme;
+  src.loop = true;
+  src.loopStart = lead + THEME.loopStart;
+  src.loopEnd = lead + THEME.loopEnd;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(MUSIC_VOLUME, now + 0.12);
+  src.connect(gain).connect(duckGain);
+  src.start(now, lead + offset);
+  startedAt = now - offset;
+  voice = { src, gain };
+}
+
+function stopTheme(fade = 0.2) {
+  const { src, gain } = voice;
+  voice = null;
+  offset = position();
+  const now = ctx.currentTime;
+  gain.gain.cancelScheduledValues(now);
+  gain.gain.setValueAtTime(gain.gain.value, now);
+  gain.gain.setTargetAtTime(0, now, fade / 4);
+  src.stop(now + fade + 0.05);
+  src.onended = () => gain.disconnect();
+}
+
+function syncMusic() {
+  if (!ctx) return;
+  const should = song.want === 'playing' && song.on && !muted && !!theme && ctx.state === 'running';
+  if (should && !voice) startTheme();
+  else if (!should && voice) stopTheme();
+}
+
+export const music = {
+  // A new game: start the track from the top.
+  play() {
+    song.want = 'playing';
+    if (voice) stopTheme(0.05);
+    offset = 0;
+    syncMusic();
+  },
+  pause() {
+    song.want = 'paused';
+    syncMusic();
+  },
+  resume() {
+    song.want = 'playing';
+    syncMusic();
+  },
+  end() {
+    song.want = 'stopped';
+    if (voice) stopTheme(1.2);
+    offset = 0;
+  },
+  // Dip the music under a big sound effect, then bring it back.
+  duck(amount = 0.35, hold = 0.3) {
+    if (!voice) return;
+    const now = ctx.currentTime;
+    duckGain.gain.cancelScheduledValues(now);
+    duckGain.gain.setValueAtTime(duckGain.gain.value, now);
+    duckGain.gain.setTargetAtTime(amount, now, 0.02);
+    duckGain.gain.setTargetAtTime(1, now + hold, 0.25);
+  },
+  setOn(on) {
+    song.on = on;
+    try {
+      localStorage.setItem(MUSIC_KEY, on ? 'on' : 'off');
+    } catch {
+      // Private browsing can refuse storage; the switch still works for this visit.
+    }
+    syncMusic();
+  },
+  isOn() {
+    return song.on;
+  },
+  isPlaying() {
+    return !!voice;
+  },
+  // For automated checks.
+  debug() {
+    return { loaded: !!theme, lead, duration: theme?.duration, position: voice ? position() : offset };
+  },
+};
 
 function ready() {
   return ctx && ctx.state === 'running' && !muted;
