@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#120726">
+  <meta name="color-scheme" content="dark">
+  <title>Rumble Drop – a 3D falling-block game</title>
+  <link rel="manifest" href="/_system/app/manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="apple-touch-icon" href="/_system/app/icon-180.png">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <header class="top">
+    <h1 class="brand"><span class="brand-r">Rumble</span> <span class="brand-d">Drop</span></h1>
+    <dl class="stats" aria-live="off">
+      <div><dt>Score</dt><dd id="score">0</dd></div>
+      <div><dt>Level</dt><dd id="level">1</dd></div>
+      <div><dt>Lines</dt><dd id="lines">0</dd></div>
+    </dl>
+    <div class="top-actions">
+      <button id="mute" class="icon-btn" type="button" aria-label="Sound on" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/><path class="cross" d="M16 9l6 6M22 9l-6 6"/></svg>
+      </button>
+      <button id="pause" class="icon-btn" type="button" aria-label="Pause" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+      </button>
+    </div>
+    <emptyos-badge></emptyos-badge>
+  </header>
+
+  <main class="play">
+    <div id="stage" class="stage" aria-label="Game board. Tap to turn, drag to move, flick down to slam, flick up to hold.">
+      <canvas id="game"></canvas>
+      <div id="flash" class="flash" aria-hidden="true"></div>
+      <div id="popups" class="popups" aria-live="polite"></div>
+    </div>
+
+    <div class="pad pad-left" role="group" aria-label="Move">
+      <button class="ctl" type="button" data-cmd="left" aria-label="Move left">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <button class="ctl" type="button" data-cmd="right" aria-label="Move right">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+      <button class="ctl ctl-wide" type="button" data-cmd="soft" aria-label="Drop faster">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7"/></svg>
+      </button>
+    </div>
+
+    <div class="pad pad-right" role="group" aria-label="Turn, hold and slam">
+      <button class="ctl" type="button" data-cmd="ccw" aria-label="Turn left">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4L5 8l4 4"/><path d="M5 8h8a6 6 0 1 1-6 6"/></svg>
+      </button>
+      <button class="ctl" type="button" data-cmd="cw" aria-label="Turn right">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l4 4-4 4"/><path d="M19 8h-8a6 6 0 1 0 6 6"/></svg>
+      </button>
+      <button class="ctl ctl-hold" type="button" data-cmd="hold" aria-label="Hold piece">
+        <span>Hold</span>
+      </button>
+      <button class="ctl ctl-slam" type="button" data-cmd="slam" aria-label="Slam down">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5l6 6 6-6M6 11l6 6 6-6"/><path d="M5 21h14"/></svg>
+        <span>Slam</span>
+      </button>
+    </div>
+  </main>
+
+  <section id="overlay" class="overlay" data-kind="title" aria-labelledby="overlay-title">
+    <div class="card">
+      <h2 id="overlay-title">Rumble Drop</h2>
+      <p id="overlay-text">Stack the falling blocks, fill rows to blow them up.</p>
+      <div class="card-actions">
+        <button id="resume" class="big-btn" type="button" hidden>Resume</button>
+        <button id="play" class="big-btn primary" type="button">Play</button>
+      </div>
+      <ul class="howto">
+        <li><b>Tap</b> the board to turn</li>
+        <li><b>Drag</b> left or right to move</li>
+        <li><b>Flick down</b> to slam</li>
+        <li><b>Flick up</b> to hold a piece</li>
+      </ul>
+      <p class="keys">Keyboard: arrows move and turn, Space slams, C holds, P pauses.</p>
+    </div>
+  </section>
+
+  <script type="module" src="js/main.js"></script>
+  <script src="/_system/app/badge.js" defer></script>
+</body>
+</html>
