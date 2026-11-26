@@ -11,13 +11,27 @@ const popups = $('#popups');
 const flash = $('#flash');
 const hud = { score: $('#score'), level: $('#level'), lines: $('#lines') };
 const landscape = window.matchMedia('(orientation: landscape)');
+// Use screen dimensions, not window width, so an iPad in a narrow window keeps its layout.
+const phoneLayout = window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 480;
+if (phoneLayout) {
+  const root = document.documentElement;
+  root.classList.add('phone');
+  const viewport = window.visualViewport;
+  const syncHeight = () => {
+    if (viewport.height > 0 && viewport.scale === 1) root.style.setProperty('--phone-height', `${viewport.height}px`);
+  };
+  if (viewport) {
+    syncHeight();
+    viewport.addEventListener('resize', syncHeight);
+  }
+}
 
 const params = new URLSearchParams(location.search);
 const seed = params.has('seed') ? Number(params.get('seed')) : undefined;
 const game = new Game({ seed });
 let scene;
 try {
-  scene = new Scene3D(canvas);
+  scene = new Scene3D(canvas, { phoneLayout });
 } catch (err) {
   console.error(err);
   $('#overlay-title').textContent = 'Your browser could not start 3D graphics';
@@ -211,6 +225,7 @@ function screenFlash(color, strength) {
 }
 
 function shakeDom(level) {
+  if (phoneLayout) return; // The phone camera shakes inside the safe-area canvas.
   stage.classList.remove('jolt-1', 'jolt-2', 'jolt-3');
   void stage.offsetWidth;
   stage.classList.add(`jolt-${level}`);

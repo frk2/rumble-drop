@@ -1,10 +1,11 @@
 # Rumble Drop
 
 A colorful 3D falling-block game built with three.js, made to be played by touch
-on an iPad mini (keyboard works too). Seven four-square pieces, slam-down shakes,
-perfect-fit sparkles and line-clear explosions that grow with every extra line.
+on iPhones and iPad mini (keyboard works too). Seven four-square pieces, slam-down
+shakes, perfect-fit sparkles and line-clear explosions that grow with every extra line.
 Play in portrait, or make your browser window taller than it is wide. Turning to
 landscape pauses the game until you turn back and choose Resume.
+On iPhone, use Safari’s Add to Home Screen to play without the browser toolbar.
 
 This folder is an EmptyOS static Thing (`thing.yaml`, served from `public/`),
 published at https://rumble-drop.faraz.emptyos.app/.
@@ -19,6 +20,8 @@ published at https://rumble-drop.faraz.emptyos.app/.
   score's length or tempo, update `public/js/theme.js` to match; `./verify` checks it.
 - `public/vendor/three/` — three.js r185.1 and the postprocessing addons it uses (MIT, see `LICENSE`)
 - `./verify` — syntax checks and the game-logic and music tests in `test.mjs` (Node 22+)
+- `public/icon.svg` — Home Screen icon source. Regenerate the iOS PNG with
+  `ffmpeg -i public/icon.svg -frames:v 1 public/icon-180.png`.
 
 Run locally: `python3 -m http.server -d public 8080` and open http://localhost:8080/.
 

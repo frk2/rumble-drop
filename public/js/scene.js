@@ -6,6 +6,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { COLS, ROWS, HIDDEN, ROTATIONS, pieceCells } from './logic.js';
+import { fitScene, PHONE_BOARD_TOP, PHONE_PREVIEW_HEIGHT, PHONE_PREVIEW_Y } from './scene-layout.js';
 
 export const PALETTE = {
   I: 0xff4fa3, // bubblegum
@@ -26,13 +27,8 @@ export function cellToWorld(x, y, out = new THREE.Vector3()) {
 }
 
 const FRAME_WIDTH = COLS + 0.7;
-const VIEW_WIDTH = 11.6; // Room for the previews and neon trim on narrow screens.
-const VIEW_BOTTOM = -0.7;
-const PREVIEW_Y = ROWS + 1.2;
 const HOLD_X = -4.1;
 const NEXT_SLOTS = [-0.7, 1.75, 4.05];
-const VIEW_TOP = PREVIEW_Y + 1.15;
-const VIEW_HEIGHT = VIEW_TOP - VIEW_BOTTOM;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 function glowMaterial(opts) {
@@ -328,15 +324,17 @@ class Debris {
 
 // ---------- the whole scene ----------
 export class Scene3D {
-  constructor(canvas) {
+  constructor(canvas, { phoneLayout = false } = {}) {
     this.canvas = canvas;
+    this.phoneLayout = phoneLayout;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+    this.renderer.localClippingEnabled = phoneLayout;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(30, 1, 1, 400);
-    this.center = new THREE.Vector3(0, (VIEW_TOP + VIEW_BOTTOM) / 2, 0);
+    this.center = new THREE.Vector3();
     this.tanHalfFov = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
 
     this.time = 0;
@@ -470,21 +468,22 @@ export class Scene3D {
 
   buildPreviews() {
     this.previewRow = new THREE.Group();
-    this.previewRow.position.y = PREVIEW_Y;
+    this.previewRow.position.y = this.phoneLayout ? PHONE_PREVIEW_Y : ROWS + 1.2;
     this.scene.add(this.previewRow);
 
     const panelMat = new THREE.MeshBasicMaterial({ color: 0x1d0f3d, transparent: true, opacity: 0.6 });
     const panel = (text, x, width) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(width, 1.8), panelMat);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(width, this.phoneLayout ? PHONE_PREVIEW_HEIGHT : 1.8), panelMat);
       m.position.set(x, 0, -0.55);
       const label = labelSprite(text);
-      label.position.set(x, 0.55, 0);
+      label.position.set(x, this.phoneLayout ? 0.46 : 0.55, 0);
+      if (this.phoneLayout) label.scale.multiplyScalar(0.85);
       this.previewRow.add(m, label);
     };
     panel('HOLD', HOLD_X, 2.8);
     panel('NEXT', 1.65, 7.7);
 
-    this.previews = new THREE.InstancedMesh(this.blockGeo, this.blockMat, 4 * 4);
+    this.previews = new THREE.InstancedMesh(this.blockGeo, this.previewMat, 4 * 4);
     this.previews.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.previews.frustumCulled = false;
     this.previews.setColorAt(0, new THREE.Color());
@@ -494,7 +493,9 @@ export class Scene3D {
   buildBlocks() {
     this.blockGeo = new RoundedBoxGeometry(0.92, 0.92, 0.92, 2, 0.14);
     const map = bevelTexture();
-    this.blockMat = glowMaterial({ map, roughness: 0.28, metalness: 0.08 });
+    const blockStyle = { map, roughness: 0.28, metalness: 0.08 };
+    this.blockMat = glowMaterial(blockStyle);
+    this.previewMat = this.blockMat;
     this.debrisMat = glowMaterial({ map, roughness: 0.3, metalness: 0.1 });
     this.debrisMat.userData.glow.value = 0.35;
     const max = COLS * ROWS + 4;
@@ -510,6 +511,15 @@ export class Scene3D {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
+    if (this.phoneLayout) {
+      // The two spawn rows still exist in the game. Mask them at the well's
+      // mouth so the previews can sit directly above the 20 visible rows.
+      const mouth = [new THREE.Plane(new THREE.Vector3(0, -1, 0), PHONE_BOARD_TOP)];
+      this.blockMat.clippingPlanes = mouth;
+      this.ghostMat.clippingPlanes = mouth;
+      this.previewMat = glowMaterial(blockStyle);
+      this.previewMat.userData.glow = this.blockMat.userData.glow;
+    }
     this.ghost = new THREE.InstancedMesh(this.blockGeo, this.ghostMat, 4);
     this.ghost.frustumCulled = false;
     this.ghost.setColorAt(0, new THREE.Color());
@@ -620,9 +630,9 @@ export class Scene3D {
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.bloom.resolution.set(w / 2, h / 2);
-    // A single scale keeps the cells square. Height usually limits the
-    // 20-row well in portrait, but narrow phones can be width-limited.
-    this.cellSize = Math.min(w / VIEW_WIDTH, h / VIEW_HEIGHT);
+    const { cellSize, centerY } = fitScene(w, h, this.phoneLayout);
+    this.cellSize = cellSize;
+    this.center.y = centerY;
     this.baseDistance = h / (2 * this.tanHalfFov * this.cellSize);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -1091,6 +1101,14 @@ export class Scene3D {
     const t = performance.now() / 1000;
     const shake = this.trauma * this.trauma;
     const n = (a, b, c) => Math.sin(t * a) * 0.5 + Math.sin(t * b + 1.3) * 0.3 + Math.sin(t * c + 2.1) * 0.2;
+    if (this.phoneLayout) {
+      // Shake in the plane of the grid, within the framing gutters. Zoom and
+      // tilt would crop the outer cells when the phone well is nearly edge-to-edge.
+      const offset = Math.min(1, shake) * 4 / this.cellSize;
+      this.camera.position.set(n(37, 51, 73) * offset, this.center.y + n(41, 59, 67) * offset, this.baseDistance);
+      this.camera.rotation.set(0, 0, 0);
+      return;
+    }
     const dist = this.baseDistance * (1 - this.punch * 0.07);
     const sway = Math.sin(t * 0.35) * 0.5;
     this.camera.position.set(
