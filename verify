@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+test -f thing.yaml
+test -f public/index.html
+test ! -L public/index.html
+for f in public/js/*.js; do node --check "$f"; done
+node --test test.mjs

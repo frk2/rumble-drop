@@ -1,0 +1,7 @@
+id: rumble-drop
+name: Rumble Drop
+description: A colorful 3D falling-block game for touch screens
+type: static
+directory: public
+route: /rumble-drop
+visibility: private
