@@ -25,7 +25,9 @@ export function cellToWorld(x, y, out = new THREE.Vector3()) {
   return out.set(x - COLS / 2 + 0.5, ROWS - 1 - y + 0.5, 0);
 }
 
-const CONTENT = { left: -8.9, right: 8.9, bottom: -0.8, top: 21.2 };
+const CONTENT = { bottom: -0.8, top: 21.2 };
+const PREVIEW_INNER_X = COLS / 2 + 0.6;
+const PREVIEW_WIDTH = 3.3;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 function glowMaterial(opts) {
@@ -459,21 +461,20 @@ export class Scene3D {
     bar(COLS + 0.7, 0.3, 0, -0.2);
     // Side panels for hold and next.
     const panelMat = new THREE.MeshBasicMaterial({ color: 0x1d0f3d, transparent: true, opacity: 0.6 });
-    const panel = (x, y, h) => {
+    const rail = (text, y, h) => {
+      const rail = new THREE.Group();
       const m = new THREE.Mesh(new THREE.PlaneGeometry(3.2, h), panelMat);
-      m.position.set(x, y, -0.55);
-      g.add(m);
+      m.position.set(0, y, -0.55);
+      const label = labelSprite(text);
+      label.position.y = 20.1;
+      rail.add(m, label);
+      g.add(rail);
+      return { group: rail, label };
     };
-    this.holdPos = new THREE.Vector3(-COLS / 2 - 2.3, 17.6, 0);
-    this.nextPos = [17.6, 14.6, 11.9].map((y) => new THREE.Vector3(COLS / 2 + 2.3, y, 0));
-    panel(this.holdPos.x, 17.8, 3.6);
-    panel(this.nextPos[0].x, 15.1, 9);
-    const hl = labelSprite('HOLD');
-    hl.position.set(this.holdPos.x, 20.1, 0);
-    g.add(hl);
-    const nl = labelSprite('NEXT');
-    nl.position.set(this.nextPos[0].x, 20.1, 0);
-    g.add(nl);
+    this.holdRail = rail('HOLD', 17.8, 3.6);
+    this.nextRail = rail('NEXT', 15.1, 9);
+    this.holdPos = new THREE.Vector3(0, 17.6, 0);
+    this.nextPos = [17.6, 14.6, 11.9].map((y) => new THREE.Vector3(0, y, 0));
     this.scene.add(g);
   }
 
@@ -608,10 +609,20 @@ export class Scene3D {
     this.bloom.resolution.set(w / 2, h / 2);
     this.camera.aspect = w / h;
     const vFov = THREE.MathUtils.degToRad(this.camera.fov);
-    const cw = CONTENT.right - CONTENT.left;
     const ch = CONTENT.top - CONTENT.bottom;
+    // On tall screens, narrow the preview rails before shrinking the well.
+    this.previewScale = THREE.MathUtils.clamp((ch * this.camera.aspect / 2 - PREVIEW_INNER_X) / PREVIEW_WIDTH, 0.72, 1);
+    const previewX = PREVIEW_INNER_X + 1.7 * this.previewScale;
+    for (const [rail, sign] of [[this.holdRail, -1], [this.nextRail, 1]]) {
+      rail.group.position.x = previewX * sign;
+      rail.group.scale.x = this.previewScale;
+      rail.label.scale.y = 0.8 * this.previewScale;
+    }
+    this.holdPos.x = -previewX;
+    for (const pos of this.nextPos) pos.x = previewX;
+    this.contentHalfWidth = PREVIEW_INNER_X + PREVIEW_WIDTH * this.previewScale;
     const distH = ch / 2 / Math.tan(vFov / 2);
-    const distW = cw / 2 / (Math.tan(vFov / 2) * this.camera.aspect);
+    const distW = this.contentHalfWidth / (Math.tan(vFov / 2) * this.camera.aspect);
     this.baseDistance = Math.max(distH, distW) * 1.02;
     this.center.y = (CONTENT.top + CONTENT.bottom) / 2;
     this.camera.updateProjectionMatrix();
@@ -1021,8 +1032,8 @@ export class Scene3D {
         i++;
       }
     };
-    if (game.hold) preview(game.hold, this.holdPos, 0.62, game.holdUsed);
-    game.queue.slice(0, 3).forEach((k, n) => preview(k, this.nextPos[n], n === 0 ? 0.62 : 0.5, false));
+    if (game.hold) preview(game.hold, this.holdPos, 0.62 * this.previewScale, game.holdUsed);
+    game.queue.slice(0, 3).forEach((k, n) => preview(k, this.nextPos[n], (n === 0 ? 0.62 : 0.5) * this.previewScale, false));
     m.count = i;
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;

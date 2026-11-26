@@ -57,7 +57,6 @@ const actions = {
 
 const input = new Input({
   stage,
-  buttons: document.querySelectorAll('[data-cmd]'),
   actions,
   cellPixels: () => scene.cellPixels(),
   enabled: playing,
@@ -100,6 +99,7 @@ function start() {
   overlay.hidden = true;
   popups.replaceChildren();
   $('#pause').disabled = false;
+  stage.focus({ preventScroll: true });
   updateHud(true);
   sfx.start();
   music.play();
@@ -117,6 +117,7 @@ function resume() {
   unlockAudio();
   state = 'play';
   overlay.hidden = true;
+  stage.focus({ preventScroll: true });
   music.resume();
 }
 
@@ -307,7 +308,9 @@ function frame(now) {
 new ResizeObserver(() => scene.resize()).observe(canvas);
 // iOS: stop pinch zoom and double-tap zoom from hijacking play.
 for (const t of ['gesturestart', 'gesturechange', 'dblclick']) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
-document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', (e) => {
+  if (!overlay.contains(e.target)) e.preventDefault();
+}, { passive: false });
 
 game.drainEvents();
 showOverlay('title');
