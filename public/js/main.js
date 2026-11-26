@@ -99,6 +99,7 @@ function start() {
   overlay.hidden = true;
   popups.replaceChildren();
   $('#pause').disabled = false;
+  stage.focus({ preventScroll: true });
   updateHud(true);
   sfx.start();
   popup('GO!', 'go');
@@ -114,6 +115,7 @@ function resume() {
   unlockAudio();
   state = 'play';
   overlay.hidden = true;
+  stage.focus({ preventScroll: true });
 }
 
 $('#play').addEventListener('click', start);
